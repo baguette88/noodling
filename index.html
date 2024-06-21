@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One-Touch Jumper</title>
+    <title>One-Touch Jumper Ninja</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <style>
         body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
@@ -17,46 +17,41 @@
         let gravity = 0.6;
         let obstacles = [];
         let score = 0;
+        let layers = []; // Array to hold parallax layers
 
         function setup() {
             createCanvas(windowWidth, 400);
-            player = new Player();
+            player = new Ninja();
             obstacles.push(new Obstacle());
+            initLayers();
         }
 
         function draw() {
             background(220);
-
-            // Display score
-            textSize(32);
-            fill(0);
-            text("Score: " + score, 10, 50);
-
-            // Update and display player
+            updateLayers(); // Update and draw parallax layers
             player.update();
             player.display();
-
-            // Manage obstacles
-            if (frameCount % 120 === 0) {
+            
+            // Manage and display obstacles
+            if (frameCount % 60 === 0) {
                 obstacles.push(new Obstacle());
             }
-
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 obstacles[i].update();
                 obstacles[i].display();
-
                 if (obstacles[i].hits(player)) {
-                    noLoop(); // Game over
+                    noLoop(); // Stop the game on collision
+                    fill(0);
                     textSize(64);
                     textAlign(CENTER);
                     text("Game Over!", width / 2, height / 2);
                 }
-
                 if (obstacles[i].offscreen()) {
                     obstacles.splice(i, 1);
                     score++;
                 }
             }
+            displayScore();
         }
 
         function keyPressed() {
@@ -69,18 +64,56 @@
             player.jump();
         }
 
-        // Player class
-        class Player {
+        // Initialize parallax layers
+        function initLayers() {
+            for (let i = 0; i < 3; i++) {
+                layers[i] = { shapes: [], speed: (i + 1) * 0.75 };
+                for (let j = 0; j < 10; j++) { // Fewer shapes for clearer visuals
+                    layers[i].shapes.push({
+                        x: random(width),
+                        y: random(height - 50), // Keep shapes away from the bottom
+                        size: random(20, 80)
+                    });
+                }
+            }
+        }
+
+        // Update and draw parallax layers
+        function updateLayers() {
+            layers.forEach(layer => {
+                fill(120 + layer.speed * 40, 100, 100, 150); // Different color and semi-transparent for visual depth
+                layer.shapes.forEach(shape => {
+                    ellipse(shape.x, shape.y, shape.size); // Use ellipses for a softer look
+                    shape.x -= layer.speed; // Move shapes based on layer speed
+                    if (shape.x + shape.size < 0) { // Reset shape position when off screen
+                        shape.x = width + shape.size;
+                        shape.y = random(height - 50);
+                        shape.size = random(20, 80);
+                    }
+                });
+            });
+        }
+
+        // Display score
+        function displayScore() {
+            fill(0);
+            textSize(32);
+            text("Score: " + score, 10, 50);
+        }
+
+        class Ninja {
             constructor() {
                 this.size = 50;
                 this.x = 50;
                 this.y = height - this.size;
                 this.velocity = 0;
+                this.angle = 0;
             }
 
             jump() {
-                if (this.y === height - this.size) { // Only jump if on the ground
+                if (this.y === height - this.size) {
                     this.velocity = -15;
+                    this.angle = 0;
                 }
             }
 
@@ -88,33 +121,50 @@
                 this.y += this.velocity;
                 this.velocity += gravity;
                 this.y = constrain(this.y, 0, height - this.size);
+                if (this.y < height - this.size) {
+                    this.angle = lerp(this.angle, PI * 2, 0.1); // Spin
+                } else {
+                    this.angle = 0; // Reset angle to land on feet
+                }
             }
 
             display() {
-                fill(255, 0, 0);
-                rect(this.x, this.y, this.size, this.size);
+                push();
+                translate(this.x + this.size / 2, this.y + this.size / 2);
+                rotate(this.angle);
+                fill(0);
+                beginShape(); // Draw a ninja star shape
+                for (let i = 0; i < TWO_PI; i += TWO_PI / 5) {
+                    let x = cos(i) * this.size / 2;
+                    let y = sin(i) * this.size / 2;
+                    vertex(x, y);
+                    vertex(x * 0.5, y * 0.5); // Inner vertex
+                }
+                endShape(CLOSE);
+                pop();
             }
         }
 
-        // Obstacle class
         class Obstacle {
             constructor() {
-                this.size = 40;
+                this.size = random(30, 60); // Variable size
                 this.x = width;
                 this.y = height - this.size;
+                this.color = color(random(255), random(255), random(255), 200);
             }
 
             update() {
-                this.x -= 6;
+                this.x -= 6 + score * 0.1; // Increase speed based on score
             }
 
             display() {
-                fill(0, 255, 0);
-                rect(this.x, this.y, this.size, this.size);
+                fill(this.color);
+                ellipse(this.x, this.y + this.size / 2, this.size, this.size); // Round obstacles
             }
 
-            hits(player) {
-                return (player.x < this.x + this.size && player.x + player.size > this.x && player.y < this.y + this.size && player.y + player.size > this.y);
+            hits(ninja) {
+                let d = dist(ninja.x + ninja.size / 2, ninja.y + ninja.size / 2, this.x, this.y + this.size / 2);
+                return d < (ninja.size / 2 + this.size / 2);
             }
 
             offscreen() {
